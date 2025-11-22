@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <style>
+      /* --- STYLE CSS (Tampilan Nyaman) --- */
+      :root {
+        --bg-app: #eaeff2;
+        --bg-card: #ffffff;
+        --text-main: #37474f;
+        --header-bg: #eceff1;
+      }
+
+      body { 
+        font-family: 'Segoe UI', Tahoma, sans-serif; 
+        background-color: var(--bg-app); 
+        margin: 0; padding: 20px; 
+        color: var(--text-main);
+      }
+
+      /* Kotak Utama */
+      .container {
+        max-width: 1000px;
+        margin: 0 auto;
+        background: var(--bg-card);
+        padding: 25px;
+        border-radius: 10px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+      }
+
+      /* Header & Controls */
+      .header { margin-bottom: 20px; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+      h2 { margin: 0; color: #263238; }
+      
+      .controls { display: flex; gap: 10px; margin-bottom: 15px; }
+      
+      #inputCari {
+        flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 5px;
+        background: #fafafa;
+      }
+      
+      /* Tombol */
+      button { padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; color: white; }
+      .btn-simpan { background-color: #2e7d32; } /* Hijau Kalem */
+      .btn-simpan:hover { background-color: #1b5e20; }
+      .btn-lihat { background-color: #546e7a; padding: 5px 10px; font-size: 13px;} /* Biru Abu */
+      
+      /* Tabel */
+      table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+      th { background: var(--header-bg); padding: 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #cfd8dc; }
+      td { padding: 10px; border-bottom: 1px solid #f1f1f1; vertical-align: middle; }
+      tr:hover { background-color: #f5f7f8; }
+      
+      .input-esai { width: 70px; padding: 5px; text-align: center; border: 1px solid #ccc; border-radius: 4px; }
+      .nilai-akhir { font-weight: bold; color: #2e7d32; }
+      .text-center { text-align: center; }
+
+      /* Pesan Status */
+      #status { padding: 10px; margin-bottom: 10px; display: none; border-radius: 5px; }
+      .sukses { background: #e8f5e9; color: #2e7d32; border: 1px solid #c8e6c9; }
+      .error { background: #ffebee; color: #c62828; border: 1px solid #ffcdd2; }
+
+      /* Modal (Popup) */
+      .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 999; }
+      .modal-content { background: white; margin: 5% auto; width: 70%; padding: 20px; border-radius: 8px; max-height: 80vh; overflow-y: auto; }
+      .close { float: right; font-size: 24px; cursor: pointer; }
+      .soal-box { border: 1px solid #eee; padding: 10px; margin-bottom: 10px; background: #fafafa; border-left: 4px solid #546e7a; }
+
+      .btn-download { 
+        background-color: #ef6c00; /* Warna Oranye */
+        margin-left: 10px;         /* Jarak dari tombol simpan */
+      } 
+      .btn-download:hover { background-color: #e65100; }
+    </style>
+  </head>
+  <body>
+
+    <div class="container">
+      <div class="header">
+        <h2>📋 Aplikasi Koreksi Esai</h2>
+      </div>
+
+      <div id="status"></div>
+
+      <div class="controls">
+        <input type="text" id="inputCari" onkeyup="fungsiCari()" placeholder="🔍 Cari Nama Siswa...">
+        <button class="btn-download" id="btnDownload" onclick="downloadExcel()">📥 Download Excel</button>
+        <button class="btn-simpan" id="btnSimpan" onclick="simpanData()">💾 Simpan Nilai</button>
+      </div>
+
+      <table id="tabelKoreksi">
+        <thead>
+          <tr>
+            <th>No</th>
+            <th>Nama Murid</th>
+            <th>Kelas</th>
+            <th class="text-center">Nilai PG</th>
+            <th class="text-center">Nilai Esai</th>
+            <th class="text-center">Nilai Akhir</th>
+            <th class="text-center">Jawaban Esai</th>
+          </tr>
+        </thead>
+        <tbody id="tabelBody">
+          <tr>
+            <td colspan="7" style="text-align:center; padding: 20px;">
+              ⏳ Menghubungkan ke database...
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div id="modalEsai" class="modal">
+      <div class="modal-content">
+        <span class="close" onclick="tutupModal()">&times;</span>
+        <h3 id="modalTitle">Periksa Jawaban</h3>
+        <div id="modalBody">Memuat...</div>
+      </div>
+    </div>
+
+    <script>
+      // Jalankan saat halaman selesai dimuat (Lebih aman dari window.onload)
+      document.addEventListener('DOMContentLoaded', function() {
+        loadData();
+      });
+
+      function loadData() {
+        var tbody = document.getElementById('tabelBody');
+        tbody.innerHTML = "<tr><td colspan='7' style='text-align:center; padding:20px;'>🔄 Sedang mengambil data...</td></tr>";
+        
+        // Panggil Server dengan Error Handler
+        google.script.run
+          .withSuccessHandler(tampilkanTabel)
+          .withFailureHandler(function(error) {
+             tbody.innerHTML = "<tr><td colspan='7' style='color:red; text-align:center;'>❌ Gagal memuat data: " + error + "</td></tr>";
+          })
+          .getDataKoreksi();
+      }
+
+      function tampilkanTabel(data) {
+        var tbody = document.getElementById('tabelBody');
+        tbody.innerHTML = ""; 
+        
+        if (!data || data.length === 0) {
+            tbody.innerHTML = "<tr><td colspan='7' style='text-align:center;'>Data kosong. Cek Sheet 'Koreksi'.</td></tr>";
+            return;
+        }
+
+        data.forEach(function(row) {
+          var tr = document.createElement('tr');
+          
+          // row[0]=ID, row[1]=Nama, row[2]=Kelas, row[3]=PG, row[4]=Esai, row[5]=Akhir
+          var html = `
+            <td>${row[0]}</td>
+            <td>${row[1]}</td>
+            <td>${row[2]}</td>
+            <td class="text-center nilai-pg">${row[3]}</td>
+            <td class="text-center">
+               <input type="number" class="input-esai" 
+                      data-id="${row[0]}" 
+                      value="${row[4]}" 
+                      oninput="hitungLive(this)">
+            </td>
+            <td class="text-center nilai-akhir">${row[5]}</td>
+            <td class="text-center">
+              <button class="btn-lihat" onclick="bukaModal('${row[0]}', '${row[1]}')">👁️ Cek</button>
+            </td>
+          `;
+          tr.innerHTML = html;
+          tbody.appendChild(tr);
+        });
+        
+        // Jalankan filter jika ada teks pencarian tersisa
+        fungsiCari();
+      }
+
+      // --- Fungsi-fungsi Lain ---
+
+      function hitungLive(elm) {
+        var row = elm.closest('tr');
+        var pg = parseFloat(row.querySelector('.nilai-pg').innerText) || 0;
+        var esai = parseFloat(elm.value) || 0;
+        row.querySelector('.nilai-akhir').innerText = (pg + esai)/2;
+      }
+
+      function fungsiCari() {
+        var input = document.getElementById("inputCari");
+        var filter = input.value.toUpperCase();
+        var rows = document.getElementById("tabelBody").getElementsByTagName("tr");
+
+        for (var i = 0; i < rows.length; i++) {
+           // Skip baris loading/kosong
+           if(rows[i].getElementsByTagName("td").length < 2) continue;
+           
+           var tdNama = rows[i].getElementsByTagName("td")[1];
+           var tdKelas = rows[i].getElementsByTagName("td")[2];
+           if (tdNama && tdKelas) {
+             var txt = (tdNama.innerText + " " + tdKelas.innerText).toUpperCase();
+             rows[i].style.display = txt.indexOf(filter) > -1 ? "" : "none";
+           }
+        }
+      }
+
+      function simpanData() {
+        var btn = document.getElementById('btnSimpan');
+        var inputs = document.querySelectorAll('.input-esai');
+        var status = document.getElementById('status');
+        var dataUpdate = [];
+
+        btn.innerText = "⏳ Menyimpan...";
+        btn.disabled = true;
+
+        inputs.forEach(function(input) {
+          dataUpdate.push({ id: input.getAttribute('data-id'), nilai: input.value });
+        });
+
+        google.script.run
+          .withSuccessHandler(function() {
+             status.style.display = 'block';
+             status.className = 'sukses';
+             status.innerText = "✅ Data berhasil disimpan!";
+             loadData(); // Refresh
+             btn.innerText = "💾 Simpan Nilai";
+             btn.disabled = false;
+             setTimeout(function(){ status.style.display='none'; }, 3000);
+          })
+          .withFailureHandler(function(err) {
+             alert("Gagal menyimpan: " + err);
+             btn.innerText = "💾 Simpan Nilai";
+             btn.disabled = false;
+          })
+          .simpanSemuaNilai(dataUpdate);
+      }
+
+      // Modal Logic
+      function bukaModal(id, nama) {
+        var modal = document.getElementById('modalEsai');
+        var body = document.getElementById('modalBody');
+        document.getElementById('modalTitle').innerText = "Periksa: " + nama;
+        modal.style.display = 'block';
+        body.innerHTML = "⏳ Mengambil jawaban...";
+        
+        google.script.run.withSuccessHandler(function(hasil) {
+          if(!hasil) { body.innerHTML = "Data tidak ditemukan."; return; }
+          var html = "";
+          for(var i=0; i<hasil.soal.length; i++) {
+            html += `<div class="soal-box">
+              <strong>Soal ${i+1}:</strong> ${hasil.soal[i]}<br>
+              <div style="margin-top:5px; color:#333;">👉 ${hasil.jawaban[i]}</div>
+            </div>`;
+          }
+          body.innerHTML = html;
+        }).getDetailEsai(id);
+      }
+
+      function tutupModal() {
+        document.getElementById('modalEsai').style.display = 'none';
+      }
+      window.onclick = function(e) {
+        if(e.target == document.getElementById('modalEsai')) tutupModal();
+      }
+
+      // --- FUNGSI DOWNLOAD EXCEL (Tambahkan di bagian script) ---
+      function downloadExcel() {
+        var btn = document.getElementById('btnDownload');
+        var textAsli = btn.innerText;
+        
+        // Ubah tombol jadi loading
+        btn.innerText = "⏳ Memproses...";
+        btn.disabled = true;
+        
+        // Panggil fungsi server Code.gs
+        google.script.run.withSuccessHandler(function(url) {
+           if(url) {
+             // Buka link download di tab baru
+             window.open(url, '_blank');
+           } else {
+             alert("Gagal membuat link download. Pastikan nama sheet benar.");
+           }
+           
+           // Kembalikan tombol seperti semula
+           btn.innerText = textAsli;
+           btn.disabled = false;
+        }).dapatkanLinkDownload();
+      }
+    </script>
+  </body>
+</html>
