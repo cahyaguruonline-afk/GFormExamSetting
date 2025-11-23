@@ -47,7 +47,20 @@
       
       /* Tabel */
       table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-      th { background: var(--header-bg); padding: 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #cfd8dc; }
+      /* --- IDE 2: STICKY HEADER --- */
+      th { 
+        background: var(--header-bg); /* Pastikan ada warna background */
+        padding: 12px; 
+        text-align: left; 
+        font-weight: 600; 
+        border-bottom: 2px solid #cfd8dc;
+        
+        /* Tambahkan 3 baris ini: */
+        position: sticky;
+        top: 0;
+        z-index: 10; /* Supaya selalu di atas tulisan lain */
+        box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.1); /* Bayangan sedikit biar cantik */
+      }
       td { padding: 10px; border-bottom: 1px solid #f1f1f1; vertical-align: middle; }
       tr:hover { background-color: #f5f7f8; }
       
@@ -71,6 +84,15 @@
         margin-left: 10px;         /* Jarak dari tombol simpan */
       } 
       .btn-download:hover { background-color: #e65100; }
+
+      body { 
+        font-family: 'Segoe UI', Tahoma, sans-serif; 
+        background-color: var(--bg-app); 
+        margin: 0; 
+        padding: 20px; 
+        padding-bottom: 80px; /* TAMBAHAN: Memberi ruang kosong di bawah agar tidak mentok */
+        color: var(--text-main);
+      }
     </style>
   </head>
   <body>
@@ -137,50 +159,71 @@
           .getDataKoreksi();
       }
 
+      // GANTI fungsi tampilkanTabel yang lama dengan ini:
+      
       function tampilkanTabel(data) {
         var tbody = document.getElementById('tabelBody');
         tbody.innerHTML = ""; 
         
         if (!data || data.length === 0) {
-            tbody.innerHTML = "<tr><td colspan='7' style='text-align:center;'>Data kosong. Cek Sheet 'Koreksi'.</td></tr>";
+            tbody.innerHTML = "<tr><td colspan='7' style='text-align:center;'>Data kosong.</td></tr>";
             return;
         }
 
         data.forEach(function(row) {
           var tr = document.createElement('tr');
           
-          // row[0]=ID, row[1]=Nama, row[2]=Kelas, row[3]=PG, row[4]=Esai, row[5]=Akhir
+          // --- PERBAIKAN PENTING DI SINI ---
+          // Kita amankan Nama (row[1]) dari tanda kutip (') agar tombol tidak error
+          // Contoh: "Ma'ruf" akan diubah jadi aman
+          var namaAman = String(row[1]).replace(/'/g, "\\'"); 
+          
           var html = `
             <td>${row[0]}</td>
             <td>${row[1]}</td>
             <td>${row[2]}</td>
             <td class="text-center nilai-pg">${row[3]}</td>
             <td class="text-center">
-               <input type="number" class="input-esai" 
-                      data-id="${row[0]}" 
-                      value="${row[4]}" 
-                      oninput="hitungLive(this)">
+               <input type="number" class="input-esai" data-id="${row[0]}" value="${row[4]}" oninput="hitungLive(this)">
             </td>
             <td class="text-center nilai-akhir">${row[5]}</td>
             <td class="text-center">
-              <button class="btn-lihat" onclick="bukaModal('${row[0]}', '${row[1]}')">👁️ Cek</button>
+              <button class="btn-lihat" onclick="bukaModal('${row[0]}', '${namaAman}')">👁️ Cek</button>
             </td>
           `;
           tr.innerHTML = html;
           tbody.appendChild(tr);
         });
         
-        // Jalankan filter jika ada teks pencarian tersisa
         fungsiCari();
       }
 
       // --- Fungsi-fungsi Lain ---
 
+      // --- IDE 3: VALIDASI NILAI MAX ---
       function hitungLive(elm) {
+        var NILAI_MAX_ESAI = 100; // Tentukan nilai maksimal esai di sini (misal 50)
+        
+        var nilaiInput = parseFloat(elm.value) || 0;
+
+        // Cek jika melebihi batas
+        if (nilaiInput > NILAI_MAX_ESAI) {
+           alert("Ups! Nilai esai maksimal adalah " + NILAI_MAX_ESAI);
+           elm.value = NILAI_MAX_ESAI; // Otomatis ubah ke max
+           nilaiInput = NILAI_MAX_ESAI;
+           // Beri warna merah sebentar biar sadar
+           elm.style.backgroundColor = "#ffcdd2";
+           setTimeout(function(){ elm.style.backgroundColor = "white"; }, 1000);
+        } else if (nilaiInput < 0) {
+           elm.value = 0;
+           nilaiInput = 0;
+        }
+
         var row = elm.closest('tr');
         var pg = parseFloat(row.querySelector('.nilai-pg').innerText) || 0;
-        var esai = parseFloat(elm.value) || 0;
-        row.querySelector('.nilai-akhir').innerText = (pg + esai)/2;
+        
+        // Update Total
+        row.querySelector('.nilai-akhir').innerText = (pg + nilaiInput)/2;
       }
 
       function fungsiCari() {
@@ -283,6 +326,33 @@
            btn.disabled = false;
         }).dapatkanLinkDownload();
       }
+
+      // --- IDE 1: PINDAH BARIS DENGAN ENTER ---
+      // Taruh kode ini di bagian bawah script
+      document.addEventListener('keydown', function(event) {
+        if (event.key === "Enter") {
+          var active = document.activeElement;
+          // Cek apakah yang sedang aktif adalah input nilai
+          if (active.classList.contains('input-esai')) {
+            event.preventDefault(); // Cegah submit form (jika ada)
+            
+            // Cari baris (tr) tempat input berada
+            var currentTr = active.closest('tr');
+            // Cari baris berikutnya
+            var nextTr = currentTr.nextElementSibling;
+            
+            if (nextTr) {
+              // Cari input di baris berikutnya dan fokuskan
+              var nextInput = nextTr.querySelector('.input-esai');
+              if (nextInput) {
+                nextInput.focus();
+                nextInput.select(); // Otomatis blok angkanya supaya siap timpa
+              }
+            }
+          }
+        }
+      });
+
     </script>
   </body>
 </html>
