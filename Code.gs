@@ -10,26 +10,31 @@ function onOpen() {
       .addItem('Tautkan/Hapus Respon Google Form', 'hapusSemuaRespons') 
       .addToUi();
 }
+// Setelah Menekan tombol Buat Sheet, Menu nya hilang
+function onOpen1() {
+  SpreadsheetApp.getUi()
+      .createMenu('Formulir') // Nama menu utama
+      .addItem('Buka Draft Formulir', 'openDraftGoogleFormLink') 
+      .addItem('Update Formulir', 'showConfirmationDialog') 
+      .addItem('Tautkan/Hapus Respon Google Form', 'hapusSemuaRespons') 
+      .addToUi();
+}
 
 function buatSistemUjian() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  
+
   // --- 1. Sheet "Input Soal" ---
   var sheetInput = createOrGetSheet(ss, "Input Soal");
-  sheetInput.clear(); // Bersihkan jika sudah ada isi sebelumnya
-  
-  // Header
+  sheetInput.clear();
   sheetInput.getRange("A1:H1").setValues([
     ["No", "Jenis Soal", "Pertanyaan", "Jawaban Yang Benar", "Pilihan 1", "Pilihan 2", "Pilihan 3", "Pilihan 4"]
   ]);
-  
   // Isi Nomor 1-40 dan "PG"
   var dataPG = [];
   for (var i = 1; i <= 40; i++) {
     dataPG.push([i, "PG"]);
   }
   sheetInput.getRange(2, 1, 40, 2).setValues(dataPG);
-  
   // Isi Nomor 1-5 dan "Esai"
   var dataEsai = [];
   for (var j = 1; j <= 5; j++) {
@@ -37,13 +42,31 @@ function buatSistemUjian() {
   }
   sheetInput.getRange(42, 1, 5, 2).setValues(dataEsai);
   
-  
+  //Hapus Kolom dan Baris (Sisakan 60 baris, 8 Kolom A-H)
+  hapusBarisKolomKosong(sheetInput, 46, 8);
+
+  //Proteksi Sheet Input Soal
+  var pInput = sheetInput.protect().setDescription("Proteksi Sheet");
+  var rangeInputBoleh = sheetInput.getRange("C2:H46"); // Area Pertanyaan boleh diedit
+  pInput.setUnprotectedRanges([rangeInputBoleh]);
+  aturProteksiHanyaSaya(pInput); // <--- Set Hanya Anda
+
   // --- 2. Sheet "Data Peserta" ---
   var sheetPeserta = createOrGetSheet(ss, "Data Peserta");
   sheetPeserta.clear();
   // Set Rumus A1. Note: Kita escape tanda kutip dua (") dengan backslash (\)
-  sheetPeserta.getRange("A1").setFormula('=IMPORTRANGE(B1;"Data Peserta!A1:A")');
+  sheetPeserta.getRange("B1").setValue("Isi Link Sumber >>");
+  sheetPeserta.getRange("B2").setValue("Isi Kelas >>");
+  sheetPeserta.getRange("A1").setFormula('=IMPORTRANGE(C1;"Data Peserta "&C2&"!A1:A")');
   
+  hapusBarisKolomKosong(sheetPeserta, 1000, 3);
+
+  var pPeserta = sheetPeserta.protect().setDescription("Proteksi Sheet");
+  var rangePesertaBoleh = sheetPeserta.getRange("B1"); // Area Pertanyaan boleh diedit
+  var rangeC1C2 = sheetPeserta.getRange("C1:C2");
+  pPeserta.setUnprotectedRanges([rangePesertaBoleh, rangeC1C2]);
+  aturProteksiHanyaSaya(pPeserta); // <--- Set Hanya Anda
+
   
   // --- 3. Sheet "Soal" ---
   var sheetSoal = createOrGetSheet(ss, "Soal");
@@ -51,9 +74,15 @@ function buatSistemUjian() {
   sheetSoal.getRange("A1").setValue("DD");
   sheetSoal.getRange("B1").setValue("PILIH NAMA");
   sheetSoal.getRange("C1").setValue("Copy di Sini");
-  sheetSoal.getRange("A2").setFormula("=QUERY('Input Soal'!B2:H;\"select *\";-1)");
-  
-  
+  sheetSoal.getRange("A2").setFormula("=QUERY(ARRAYFORMULA(TO_TEXT('Input Soal'!B2:H)); \"Select *\"; -1)");
+  sheetSoal.getRange("H2").setFormula("=arrayformula(IF(ISBLANK(B2:B);\"\";IF(A2:A=\"\";\"\";1)))");
+  sheetSoal.getRange("I2").setFormula("=arrayformula(if(ISBLANK(B2:B);\"\";if(A2:A=\"\";\"\";\"Soal \"&'Input Soal'!B2:B&\" \"&'Input Soal'!A2:A)))");
+
+  hapusBarisKolomKosong(sheetSoal, 46, 9);
+
+  var pSoal = sheetSoal.protect().setDescription("Proteksi Sheet");
+  aturProteksiHanyaSaya(pSoal); // <--- Set Hanya Anda
+
   // --- 4. Sheet "Rekap" ---
   var sheetRekap = createOrGetSheet(ss, "Rekap");
   sheetRekap.clear();
@@ -83,20 +112,41 @@ function buatSistemUjian() {
   // Rumus I1 (Query Jawaban Esai - Asumsi kolom AR:AV di sheet respon)
   sheetRekap.getRange("I1").setFormula('=QUERY(INDIRECT(A2&"!AR:AV");"select *";-1)');
   
-  
-  // --- 5. Sheet "Nilai" ---
-  var sheetNilai = createOrGetSheet(ss, "Nilai");
-  sheetNilai.clear();
+  hapusBarisKolomKosong(sheetRekap, 500, 13);
+
+  var pRekap = sheetRekap.protect().setDescription("Proteksi Sheet");
+  aturProteksiHanyaSaya(pRekap); // <--- Set Hanya Anda
+
+  // --- 5. Sheet "Koreksi" ---
+  var sheetKoreksi = createOrGetSheet(ss, "Koreksi");
+  sheetKoreksi.clear();
   
   // Rumus A1 (Query dari Rekap)
-  sheetNilai.getRange("A1").setFormula('=QUERY(Rekap!E1:H;"select * Where Col1 is not null order by Col3, Col2 asc";-1)');
-  
-  sheetNilai.getRange("E1").setValue("NILAI ESAI");
+  sheetKoreksi.getRange("A1").setFormula('=QUERY(Rekap!E1:H;"select * Where Col1 is not null";-1)');
+  sheetKoreksi.getRange("E1").setValue("NILAI ESAI");
   
   // Rumus F1 (Nilai Akhir)
   var rumusF1Nilai = '=IFERROR(ARRAYFORMULA(if(row(B:B)=1;"NILAI AKHIR";IF(A:A="";IFERROR(1/0);IF(E:E="";D:D;D:D*50%+E:E*50%))));"")';
-  sheetNilai.getRange("F1").setFormula(rumusF1Nilai);
+  sheetKoreksi.getRange("F1").setFormula(rumusF1Nilai);
   
+  hapusBarisKolomKosong(sheetKoreksi, 1000, 6);
+
+  var pKoreksi = sheetKoreksi.protect().setDescription("Proteksi Sheet");
+  var rangeKoreksiBoleh = sheetKoreksi.getRange("E2:E"); // Area Pertanyaan boleh diedit
+  pKoreksi.setUnprotectedRanges([rangeKoreksiBoleh]);
+  aturProteksiHanyaSaya(pKoreksi); // <--- Set Hanya Anda
+
+// --- 6. Sheet "Nilai" ---
+  var sheetDownloadNilai = createOrGetSheet(ss, "Nilai");
+  sheetDownloadNilai.clear();
+  sheetDownloadNilai.getRange("A1").setFormula('=QUERY(Koreksi!A1:F;"Select * where Col1 is not null order by Col3, Col2";-1)');
+
+  hapusBarisKolomKosong(sheetDownloadNilai, 1000, 6);
+
+  var pDownloadNilai = sheetDownloadNilai.protect().setDescription("Proteksi Sheet");
+  aturProteksiHanyaSaya(pDownloadNilai); // <--- Set Hanya Anda
+
+  onOpen1();
   SpreadsheetApp.getUi().alert("Selesai! Semua sheet dan rumus telah dibuat.");
 }
 
@@ -107,6 +157,37 @@ function createOrGetSheet(ss, name) {
     return sheet;
   } else {
     return ss.insertSheet(name);
+  }
+}
+
+// Fungsi baru untuk mengatur izin "Hanya Anda"
+function aturProteksiHanyaSaya(protection) {
+  // 1. Pastikan script mengenali Anda (pemilik) sebagai editor
+  var me = Session.getEffectiveUser();
+  protection.addEditor(me);
+
+  // 2. Hapus semua editor lain yang ada di list (teman/kolega)
+  protection.removeEditors(protection.getEditors());
+
+  // 3. Matikan edit domain jika menggunakan akun sekolah/kantor
+  if (protection.canDomainEdit()) {
+    protection.setDomainEdit(false);
+  }
+}
+
+// Menghapus Baris dan Kolom yang tidak digunakan
+function hapusBarisKolomKosong(sheet, barisDiinginkan, kolomDiinginkan) {
+  var maxRows = sheet.getMaxRows();
+  var maxCols = sheet.getMaxColumns();
+  
+  // Hapus Baris Berlebih
+  if (maxRows > barisDiinginkan) {
+    sheet.deleteRows(barisDiinginkan + 1, maxRows - barisDiinginkan);
+  }
+  
+  // Hapus Kolom Berlebih
+  if (maxCols > kolomDiinginkan) {
+    sheet.deleteColumns(kolomDiinginkan + 1, maxCols - kolomDiinginkan);
   }
 }
 
@@ -417,7 +498,7 @@ function unlinkAndRelinkForm() {
       SpreadsheetApp.getUi().alert('Selesai', 'Tautan berhasi diperbaruhi, Ganti nama Sheet menjadi "Form Responses"', SpreadsheetApp.getUi().ButtonSet.OK);
       Logger.log('Penautan kembali berhasil.');
       hapusSheetBerdasarkanNama();
-      hapusDataSheetNilaiKolomE();
+      hapusDataSheetKoreksiKolomE();
     } catch (e) {
       Logger.log(`Terjadi kesalahan: ${e.toString()}`);
       SpreadsheetApp.getUi().alert('Kesalahan', `Tidak dapat menyelesaikan operasi: ${e.toString()}`, SpreadsheetApp.getUi().ButtonSet.OK);
@@ -474,18 +555,18 @@ function hapusSheetBerdasarkanNama() {
   }
 }
 
-function hapusDataSheetNilaiKolomE() {
-  // 1. Ambil sheet bernama "Nilai"
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Nilai');
+function hapusDataSheetKoreksiKolomE() {
+  // 1. Ambil sheet bernama "Koreksi"
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Koreksi');
   
   if (sheet) {
     // 2. Ambil range E2 sampai E paling bawah
     // clearContent() = hanya hapus teks/angka, format tetap
     sheet.getRange("E2:E").clearContent();
     
-    Logger.log("Data E2:E di sheet Nilai berhasil dihapus.");
+    Logger.log("Data E2:E di sheet Koreksi berhasil dihapus.");
   } else {
-    Logger.log("Error: Sheet 'Nilai' tidak ditemukan.");
+    Logger.log("Error: Sheet 'Koreksi' tidak ditemukan.");
   }
 }
 ////////////////////////////////////////////////////////////////////////////////////
@@ -504,11 +585,11 @@ function doGet() {
 // Fungsi 1: Mengambil data dari sheet "Koreksi" untuk ditampilkan di tabel
 function getDataKoreksi() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = ss.getSheetByName("Nilai");
+  var sheet = ss.getSheetByName("Koreksi");
   
   // Cek apakah sheet ada?
   if (!sheet) {
-    throw new Error("Sheet 'Nilai' tidak ditemukan! Periksa nama tab di bawah.");
+    throw new Error("Sheet 'Koreksi' tidak ditemukan! Periksa nama tab di bawah.");
   }
 
   var lastRow = sheet.getLastRow();
@@ -528,7 +609,7 @@ function getDataKoreksi() {
 // Fungsi 2: Menyimpan perubahan Nilai Esai
 function simpanSemuaNilai(dataNilai) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = ss.getSheetByName("Nilai");
+  var sheet = ss.getSheetByName("Koreksi");
   var dataSheet = sheet.getDataRange().getValues(); // Ambil semua data untuk pencocokan
   
   // dataNilai adalah array objek: [{id: 'P001', nilai: 80}, ...]
