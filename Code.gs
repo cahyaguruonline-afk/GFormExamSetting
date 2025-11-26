@@ -57,7 +57,8 @@ function buatSistemUjian() {
   // Set Rumus A1. Note: Kita escape tanda kutip dua (") dengan backslash (\)
   sheetPeserta.getRange("B1").setValue("Isi Link Sumber >>");
   sheetPeserta.getRange("B2").setValue("Isi Kelas >>");
-  sheetPeserta.getRange("A1").setFormula('=IMPORTRANGE(C1;"Data Peserta "&C2&"!A1:A")');
+  sheetPeserta.getRange("A1").setValue("PILIH NAMA")
+  sheetPeserta.getRange("A2").setFormula('=IMPORTRANGE(C1;"Data Peserta "&C2&"!A1:A")');
   
   hapusBarisKolomKosong(sheetPeserta, 1000, 3);
 
